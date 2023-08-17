@@ -5,8 +5,13 @@
 
 ```sh
 python3.8 -m venv virtualenv
+source virtualenv/bin/activate
 
+# For Chapter 1
 pip install pytest
+
+# For Chapter 2
+pip install pytest sqlalchemy
 ```
 
 

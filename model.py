@@ -3,7 +3,7 @@ from datetime import date
 from typing import Optional, List
 
 
-@dataclass(frozen=True)
+@dataclass(unsafe_hash=True)
 class OrderLine:
     orderid: str
     sku: str
@@ -18,6 +18,28 @@ class Batch:
         self.eta = eta
         self._purchased_quantity = qty
         self._allocations = set() # type: Set[OrderLine]
+
+
+    def __repr__(self):
+        return f"<Batch {self.reference}>"
+
+
+    def __eq__(self, other):
+        if not isinstance(other, Batch):
+            return False
+        return other.reference == self.reference
+
+
+    def __hash__(self):
+        return hash(self.reference)
+
+
+    def __gt__(self, other):
+        if self.eta is None:
+            return False
+        if other.eta is None:
+            return True
+        return self.eta > other.eta
 
 
     def allocate(self, line: OrderLine):
@@ -42,24 +64,6 @@ class Batch:
 
     def can_allocate(self, line: OrderLine) -> bool:
         return self.sku == line.sku and self.available_quantity >= line.qty
-
-
-    def __eq__(self, other):
-        if not isinstance(other, Batch):
-            return False
-        return other.reference == self.reference
-
-
-    def __hash__(self):
-        return hash(self.reference)
-
-
-    def __gt__(self, other):
-        if self.eta is None:
-            return False
-        if other.eta is None:
-            return True
-        return self.eta > other.eta
 
 
 class OutOfStock(Exception):
