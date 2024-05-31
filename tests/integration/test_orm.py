@@ -1,5 +1,5 @@
 from datetime import date
-from model import OrderLine, Batch
+from allocation.domain import model
 from sqlalchemy.sql import text
 
 
@@ -13,15 +13,15 @@ def test_orderline_mapper_can_load_lines(session):
         )
     )
     expected = [
-        OrderLine("order1", "RED-CHAIR", 12),
-        OrderLine("order1", "RED-TABLE", 13),
-        OrderLine("order2", "BLUE-LIPSTICK", 14),
+        model.OrderLine("order1", "RED-CHAIR", 12),
+        model.OrderLine("order1", "RED-TABLE", 13),
+        model.OrderLine("order2", "BLUE-LIPSTICK", 14),
     ]
-    assert session.query(OrderLine).all() == expected
+    assert session.query(model.OrderLine).all() == expected
 
 
 def test_orderline_mapper_can_save_lines(session):
-    new_line = OrderLine("order1", "DECORATIVE-WIDGET", 12)
+    new_line = model.OrderLine("order1", "DECORATIVE-WIDGET", 12)
     session.add(new_line)
     session.commit()
 
@@ -43,14 +43,14 @@ def test_retrieving_batches(session):
         )
     )
     expected = [
-        Batch("batch1", "sku1", 100, eta=None),
-        Batch("batch2", "sku2", 200, eta=date(2011, 4, 11)),
+        model.Batch("batch1", "sku1", 100, eta=None),
+        model.Batch("batch2", "sku2", 200, eta=date(2011, 4, 11)),
     ]
-    assert session.query(Batch).all() == expected
+    assert session.query(model.Batch).all() == expected
 
 
 def test_saving_batches(session):
-    batch = Batch("batch1", "sku1", 100, eta=None)
+    batch = model.Batch("batch1", "sku1", 100, eta=None)
     session.add(batch)
     session.commit()
     rows = session.execute(
@@ -60,8 +60,8 @@ def test_saving_batches(session):
 
 
 def test_saving_allocations(session):
-    batch = Batch("batch1", "sku1", 100, eta=None)
-    line = OrderLine("order1", "sku1", 10)
+    batch = model.Batch("batch1", "sku1", 100, eta=None)
+    line = model.OrderLine("order1", "sku1", 10)
     batch.allocate(line)
     session.add(batch)
     session.commit()
@@ -98,6 +98,6 @@ def test_retrieving_allocations(session):
         dict(olid=olid, bid=bid),
     )
 
-    batch = session.query(Batch).one()
+    batch = session.query(model.Batch).one()
 
-    assert batch._allocations == {OrderLine("order1", "sku1", 12)}
+    assert batch._allocations == {model.OrderLine("order1", "sku1", 12)}
