@@ -21,12 +21,17 @@ class FakeRepository(repository.AbstractRepository):
 
     def list(self):
         return list(self._batches)
-    
+
     @staticmethod
-    def for_batch(ref, sky, qty, eta=None):
-        return FakeRepository([
-            Batch(ref, sky, qty, eta),
-        ])
+    def for_batch(ref, sku, qty, eta=None):
+        return FakeRepository([Batch(ref, sku, qty, eta)])
+
+    @staticmethod
+    def for_batches(batches):
+        for ref, sku, qty, eta in batches:
+            return FakeRepository([
+                Batch(ref, sku, qty, eta) for ref, sku, qty, eta in batches
+            ])
 
 
 class FakeSession:
@@ -93,34 +98,37 @@ def test_trying_to_deallocate_unallocated_batch():
 
 
 def test_prefers_current_stock_batches_to_shipments():
-    in_stock_batch = Batch("in-stock-batch", "RETRO-CLOCK", 100, eta=None)
-    shipment_batch = Batch("shipment-batch", "RETRO-CLOCK", 100, eta=tomorrow)
-    repo = FakeRepository([in_stock_batch, shipment_batch])
+    repo = FakeRepository.for_batches([
+        ("in-stock-batch", "RETRO-CLOCK", 100, None),
+        ("shipment-batch", "RETRO-CLOCK", 100, tomorrow)
+    ])
     session = FakeSession()
     services.allocate("oref", "RETRO-CLOCK", 10, repo, session)
-    assert in_stock_batch.available_quantity == 90
-    assert shipment_batch.available_quantity == 100
+    assert repo.get("in-stock-batch").available_quantity == 90
+    assert repo.get("shipment-batch").available_quantity == 100
 
 
 def test_prefers_earlier_batches():
-    earliest = Batch("speedy-batch", "MINIMALIST-SPOON", 100, eta=today)
-    medium = Batch("normal-batch", "MINIMALIST-SPOON", 100, eta=tomorrow)
-    latest = Batch("slow-batch", "MINIMALIST-SPOON", 100, eta=later)
-    repo = FakeRepository([earliest, medium, latest])
+    repo = FakeRepository.for_batches([
+        ("speedy-batch", "MINIMALIST-SPOON", 100, today),
+        ("normal-batch", "MINIMALIST-SPOON", 100, tomorrow),
+        ("slow-batch", "MINIMALIST-SPOON", 100, later)
+    ])
     session = FakeSession()
     services.allocate("order1", "MINIMALIST-SPOON", 10, repo, session)
-    assert earliest.available_quantity == 90
-    assert medium.available_quantity == 100
-    assert latest.available_quantity == 100
+    assert repo.get("speedy-batch").available_quantity == 90
+    assert repo.get("normal-batch").available_quantity == 100
+    assert repo.get("slow-batch").available_quantity == 100
 
 
 def test_returns_allocated_batch_ref():
-    in_stock_batch = Batch("in-stock-batch-ref", "HIGHBROW-POSTER", 100, eta=None)
-    shipment_batch = Batch("shipment-batch-ref", "HIGHBROW-POSTER", 100, eta=tomorrow)
-    repo = FakeRepository([in_stock_batch, shipment_batch])
+    repo = FakeRepository.for_batches([
+        ("in-stock-batch-ref", "HIGHBROW-POSTER", 100, None),
+        ("shipment-batch-ref", "HIGHBROW-POSTER", 100, tomorrow)
+    ])
     session = FakeSession()
     allocation = services.allocate("oref", "HIGHBROW-POSTER", 10, repo, session)
-    assert allocation == in_stock_batch.reference
+    assert allocation == repo.get("in-stock-batch-ref").reference
 
 
 def test_raises_out_of_stock_exception_if_cannot_allocate():
