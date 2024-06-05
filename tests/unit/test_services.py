@@ -44,6 +44,15 @@ def test_error_for_invalid_sku():
         services.allocate(line, repo, FakeSession())
 
 
+def test_error_for_out_of_stock():
+    line = model.OrderLine("o1", "TALL-CHAIR", 10)
+    batch = model.Batch("b1", "TALL-CHAIR", 9, eta=None)
+    repo = FakeRepository([batch])
+
+    with pytest.raises(services.OutOfStock, match="Out of stock for sku TALL-CHAIR"):
+        services.allocate(line, repo, FakeSession())
+
+
 def test_commits():
     line = model.OrderLine("o1", "OMINOUS-MIRROR", 10)
     batch = model.Batch("b1", "OMINOUS-MIRROR", 100, eta=None)
@@ -52,3 +61,36 @@ def test_commits():
 
     services.allocate(line, repo, session)
     assert session.committed is True
+
+
+def test_deallocate_decrements_available_quantity():
+    repo, session = FakeRepository([]), FakeSession()
+    services.add_batch("b1", "BLUE-PLINTH", 100, None, repo, session)
+    line = model.OrderLine("o1", "BLUE-PLINTH", 10)
+    services.allocate(line, repo, session)
+    batch = repo.get(reference="b1")
+    assert batch.available_quantity == 90
+    services.deallocate(line, repo, session)
+    assert batch.available_quantity == 100
+
+
+def test_deallocate_decrements_correct_quantity():
+    repo, session = FakeRepository([]), FakeSession()
+    services.add_batch("b1", "DOG-BED-SMALL", 100, None, repo, session)
+    services.add_batch("b2", "DOG-BED-LARGE", 100, None, repo, session)
+    line = model.OrderLine("o1", "DOG-BED-SMALL", 10)
+    services.allocate(line, repo, session)
+    batch1 = repo.get(reference="b1")
+    batch2 = repo.get(reference="b2")
+    assert batch1.available_quantity == 90
+    assert batch2.available_quantity == 100
+    services.deallocate(line, repo, session)
+    assert batch1.available_quantity == 100
+    assert batch2.available_quantity == 100
+
+
+def test_trying_to_deallocate_unallocated_batch():
+    repo, session = FakeRepository([]), FakeSession()
+    services.add_batch("b1", "POPULAR-CURTAINS", 100, None, repo, session)
+    with pytest.raises(services.NotAllocated, match="Line o1 has not been allocated"):
+        services.deallocate(model.OrderLine("o1", "POPULAR-CURTAINS", 10), repo, session)
