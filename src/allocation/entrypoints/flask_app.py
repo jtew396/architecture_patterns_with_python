@@ -17,12 +17,15 @@ app = Flask(__name__)
 def allocate_endpoint():
     session = get_session()
     repo = repository.SqlAlchemyRepository(session)
-    line = model.OrderLine(
-        request.json["orderid"], request.json["sku"], request.json["qty"],
-    )
 
     try:
-        batchref = services.allocate(line, repo, session)
+        batchref = services.allocate(
+            request.json["orderid"],
+            request.json["sku"],
+            request.json["qty"],
+            repo,
+            session
+        )
     except (services.OutOfStock, services.InvalidSku) as e:
         return {"message": str(e)}, 400
 
@@ -50,12 +53,15 @@ def add_batch():
 def deallocate():
     session = get_session()
     repo = repository.SqlAlchemyRepository(session)
-    line = model.OrderLine(
-        request.json["orderid"], request.json["sku"], request.json["qty"],
-    )
 
     try:
-        services.deallocate(line, repo, session)
+        services.deallocate(
+            request.json["orderid"],
+            request.json["sku"],
+            request.json["qty"],
+            repo,
+            session
+        )
     except services.InvalidSku as e:
         return {"message": str(e)}, 400
 

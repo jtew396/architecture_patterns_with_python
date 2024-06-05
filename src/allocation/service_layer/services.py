@@ -1,6 +1,5 @@
 from allocation.adapters.repository import AbstractRepository
 from allocation.domain import model
-from allocation.domain.model import OrderLine
 
 
 class InvalidSku(Exception):
@@ -27,7 +26,8 @@ def is_allocated(line, batches):
     return line in {line for batch in batches for line in batch._allocations}
 
 
-def allocate(line: OrderLine, repo: AbstractRepository, session) -> str:
+def allocate(orderid: str, sku: str, qty: int, repo: AbstractRepository, session) -> str:
+    line = model.OrderLine(orderid, sku, qty)
     batches = repo.list()
     if not is_valid_sku(line.sku, batches):
         raise InvalidSku(f"Invalid sku {line.sku}")
@@ -43,7 +43,8 @@ def add_batch(ref, sku, qty, eta, repo, session):
     session.commit()
 
 
-def deallocate(line: OrderLine, repo: AbstractRepository, session) -> str:
+def deallocate(orderid: str, sku: str, qty: int, repo: AbstractRepository, session) -> str:
+    line = model.OrderLine(orderid, sku, qty)
     batches = repo.list()
     if not is_valid_sku(line.sku, batches):
         raise InvalidSku(f"Invalid sku {line.sku}")
