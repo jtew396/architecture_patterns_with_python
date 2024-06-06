@@ -137,3 +137,24 @@ def test_raises_out_of_stock_exception_if_cannot_allocate():
     services.allocate('order1', 'SMALL-FORK', 10, repo, session)
     with pytest.raises(services.OutOfStock, match='SMALL-FORK'):
         services.allocate('order2', 'SMALL-FORK', 1, repo, session)
+
+
+def test_add_batch():
+    repo, session = FakeRepository([]), FakeSession()
+    services.add_batch("b1", "CRUNCHY-ARMCHAIR", 100, None, repo, session)
+    assert repo.get("b1") is not None
+    assert session.committed
+
+
+def test_allocate_returns_allocation():
+    repo, session = FakeRepository([]), FakeSession()
+    services.add_batch("batch1", "COMPLICATED-LAMP", 100, None, repo, session)
+    result = services.allocate("o1", "COMPLICATED-LAMP", 10, repo, session)
+    assert result == "batch1"
+
+
+def test_allocate_errors_for_invalid_sku():
+    repo, session = FakeRepository([]), FakeSession()
+    services.add_batch("b1", "AREALSKU", 100, None, repo, session)
+    with pytest.raises(services.InvalidSku, match="Invalid sku NONEXISTENTSKU"):
+        services.allocate("o1", "NONEXISTENTSKU", 10, repo, session)

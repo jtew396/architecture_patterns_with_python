@@ -1,3 +1,5 @@
+from datetime import date
+from typing import Optional
 from allocation.adapters.repository import AbstractRepository
 from allocation.domain import model
 
@@ -38,7 +40,7 @@ def allocate(orderid: str, sku: str, qty: int, repo: AbstractRepository, session
     return batchref
 
 
-def add_batch(ref, sku, qty, eta, repo, session):
+def add_batch(ref: str, sku: str, qty: int, eta: Optional[date], repo: AbstractRepository, session) -> None:
     repo.add(model.Batch(ref, sku, qty, eta))
     session.commit()
 

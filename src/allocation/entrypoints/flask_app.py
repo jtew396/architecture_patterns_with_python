@@ -1,4 +1,5 @@
 from flask import Flask, request
+from datetime import datetime
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 
@@ -36,12 +37,14 @@ def allocate_endpoint():
 def add_batch():
     session = get_session()
     repo = repository.SqlAlchemyRepository(session)
-
+    eta = request.json["eta"]
+    if eta is not None:
+        eta = datetime.fromisoformat(eta).date()
     services.add_batch(
         request.json["ref"],
         request.json["sku"],
         request.json["qty"],
-        request.json["eta"],
+        eta,
         repo,
         session,
     )
