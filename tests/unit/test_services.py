@@ -1,7 +1,6 @@
 import pytest
 from datetime import date, timedelta
 from allocation.adapters import repository
-from allocation.domain.model import Batch
 from allocation.service_layer import services, unit_of_work
 
 today = date.today()
@@ -9,23 +8,20 @@ tomorrow = today + timedelta(days=1)
 later = tomorrow + timedelta(days=10)
 
 
-class FakeRepository(repository.AbstractRepository):
-    def __init__(self, batches):
-        self._batches = set(batches)
+class FakeRepository(repository.AbstractProductRepository):
+    def __init__(self, products):
+        self._products = set(products)
 
-    def add(self, batch):
-        self._batches.add(batch)
+    def add(self, product):
+        self._products.add(product)
 
-    def get(self, reference):
-        return next(b for b in self._batches if b.reference == reference)
-
-    def list(self):
-        return list(self._batches)
+    def get(self, sku):
+        return next((p for p in self._products if p.sku == sku), None)
 
 
 class FakeUnitOfWork(unit_of_work.AbstractUnitOfWork):
     def __init__(self):
-        self.batches = FakeRepository([])
+        self.products = FakeRepository([])
         self.committed = False
 
     def commit(self):
@@ -67,7 +63,7 @@ def test_deallocate_decrements_available_quantity():
     uow = FakeUnitOfWork()
     services.add_batch("b1", "BLUE-PLINTH", 100, None, uow)
     services.allocate("o1", "BLUE-PLINTH", 10, uow)
-    batch = uow.batches.get(reference="b1")
+    batch = uow.products.get("BLUE-PLINTH").get_batch(reference="b1")
     assert batch.available_quantity == 90
     services.deallocate("o1", "BLUE-PLINTH", 10, uow)
     assert batch.available_quantity == 100
@@ -78,8 +74,8 @@ def test_deallocate_decrements_correct_quantity():
     services.add_batch("b1", "DOG-BED-SMALL", 100, None, uow)
     services.add_batch("b2", "DOG-BED-LARGE", 100, None, uow)
     services.allocate("o1", "DOG-BED-SMALL", 10, uow)
-    batch1 = uow.batches.get(reference="b1")
-    batch2 = uow.batches.get(reference="b2")
+    batch1 = uow.products.get("DOG-BED-SMALL").get_batch(reference="b1")
+    batch2 = uow.products.get("DOG-BED-LARGE").get_batch(reference="b2")
     assert batch1.available_quantity == 90
     assert batch2.available_quantity == 100
     services.deallocate("o1", "DOG-BED-SMALL", 10, uow)
@@ -99,8 +95,8 @@ def test_prefers_current_stock_batches_to_shipments():
     services.add_batch("in-stock-batch", "RETRO-CLOCK", 100, None, uow)
     services.add_batch("shipment-batch", "RETRO-CLOCK", 100, tomorrow, uow)
     services.allocate("oref", "RETRO-CLOCK", 10, uow)
-    assert uow.batches.get("in-stock-batch").available_quantity == 90
-    assert uow.batches.get("shipment-batch").available_quantity == 100
+    assert uow.products.get("RETRO-CLOCK").get_batch("in-stock-batch").available_quantity == 90
+    assert uow.products.get("RETRO-CLOCK").get_batch("shipment-batch").available_quantity == 100
 
 
 def test_prefers_earlier_batches():
@@ -109,9 +105,9 @@ def test_prefers_earlier_batches():
     services.add_batch("normal-batch", "MINIMALIST-SPOON", 100, tomorrow, uow)
     services.add_batch("slow-batch", "MINIMALIST-SPOON", 100, later, uow)
     services.allocate("order1", "MINIMALIST-SPOON", 10, uow)
-    assert uow.batches.get("speedy-batch").available_quantity == 90
-    assert uow.batches.get("normal-batch").available_quantity == 100
-    assert uow.batches.get("slow-batch").available_quantity == 100
+    assert uow.products.get("MINIMALIST-SPOON").get_batch("speedy-batch").available_quantity == 90
+    assert uow.products.get("MINIMALIST-SPOON").get_batch("normal-batch").available_quantity == 100
+    assert uow.products.get("MINIMALIST-SPOON").get_batch("slow-batch").available_quantity == 100
 
 
 def test_returns_allocated_batch_ref():
@@ -119,7 +115,7 @@ def test_returns_allocated_batch_ref():
     services.add_batch("in-stock-batch-ref", "HIGHBROW-POSTER", 100, None, uow)
     services.add_batch("shipment-batch-ref", "HIGHBROW-POSTER", 100, tomorrow, uow)
     allocation = services.allocate("oref", "HIGHBROW-POSTER", 10, uow)
-    assert allocation == uow.batches.get("in-stock-batch-ref").reference
+    assert allocation == uow.products.get("HIGHBROW-POSTER").get_batch("in-stock-batch-ref").reference
 
 
 def test_raises_out_of_stock_exception_if_cannot_allocate():
@@ -133,7 +129,7 @@ def test_raises_out_of_stock_exception_if_cannot_allocate():
 def test_add_batch():
     uow = FakeUnitOfWork()
     services.add_batch("b1", "CRUNCHY-ARMCHAIR", 100, None, uow)
-    assert uow.batches.get("b1") is not None
+    assert uow.products.get("CRUNCHY-ARMCHAIR").get_batch("b1") is not None
     assert uow.committed
 
 
