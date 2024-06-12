@@ -1,22 +1,17 @@
 from flask import Flask, request
 from datetime import datetime
-from sqlalchemy import create_engine
-from sqlalchemy.orm import sessionmaker
 
-from allocation import config
 from allocation.adapters import orm
 from allocation.service_layer import services, unit_of_work
 
 
 orm.start_mappers()
-get_session = sessionmaker(bind=create_engine(config.get_postgres_uri()))
 app = Flask(__name__)
 
 
 @app.route("/allocate", methods=["POST"])
 def allocate_endpoint():
     uow = unit_of_work.SqlAlchemyUnitOfWork()
-
     try:
         batchref = services.allocate(
             request.json["orderid"],
@@ -26,7 +21,6 @@ def allocate_endpoint():
         )
     except (services.OutOfStock, services.InvalidSku) as e:
         return {"message": str(e)}, 400
-
     return {"batchref": batchref}, 201
 
 
@@ -43,14 +37,12 @@ def add_batch():
         eta,
         uow
     )
-
     return "OK", 201
 
 
 @app.route("/deallocate", methods=["POST"])
 def deallocate():
     uow = unit_of_work.SqlAlchemyUnitOfWork()
-
     try:
         services.deallocate(
             request.json["orderid"],
@@ -60,5 +52,4 @@ def deallocate():
         )
     except services.InvalidSku as e:
         return {"message": str(e)}, 400
-
     return "OK", 201
