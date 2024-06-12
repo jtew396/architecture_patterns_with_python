@@ -126,11 +126,18 @@ def test_raises_out_of_stock_exception_if_cannot_allocate():
         services.allocate('order2', 'SMALL-FORK', 1, uow)
 
 
-def test_add_batch():
+def test_add_batch_for_new_product():
     uow = FakeUnitOfWork()
     services.add_batch("b1", "CRUNCHY-ARMCHAIR", 100, None, uow)
     assert uow.products.get("CRUNCHY-ARMCHAIR").get_batch("b1") is not None
     assert uow.committed
+
+
+def test_add_batch_for_existing_product():
+    uow = FakeUnitOfWork()
+    services.add_batch("b1", "GARISH-RUG", 100, None, uow)
+    services.add_batch("b2", "GARISH-RUG", 99, None, uow)
+    assert "b2" in [b.reference for b in uow.products.get("GARISH-RUG").batches]
 
 
 def test_allocate_returns_allocation():
