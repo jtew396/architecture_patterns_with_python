@@ -2,7 +2,9 @@ from flask import Flask, request
 from datetime import datetime
 
 from allocation.adapters import orm
-from allocation.service_layer import services, unit_of_work
+from allocation.domain import events
+from allocation.service_layer import messagebus, unit_of_work
+from allocation.service_layer.handlers import InvalidSku, OutOfStock
 
 
 orm.start_mappers()
@@ -11,45 +13,48 @@ app = Flask(__name__)
 
 @app.route("/allocate", methods=["POST"])
 def allocate_endpoint():
-    uow = unit_of_work.SqlAlchemyUnitOfWork()
     try:
-        batchref = services.allocate(
+        event = events.AllocationRequired(
             request.json["orderid"],
             request.json["sku"],
-            request.json["qty"],
-            uow
+            request.json["qty"]
         )
-    except (services.OutOfStock, services.InvalidSku) as e:
+        results = messagebus.handle(event, unit_of_work.SqlAlchemyUnitOfWork())
+        batchref = results.pop(0)
+    except (OutOfStock, InvalidSku) as e:
         return {"message": str(e)}, 400
     return {"batchref": batchref}, 201
 
 
 @app.route("/add_batch", methods=["POST"])
 def add_batch():
-    uow = unit_of_work.SqlAlchemyUnitOfWork()
     eta = request.json["eta"]
     if eta is not None:
         eta = datetime.fromisoformat(eta).date()
-    services.add_batch(
-        request.json["ref"],
-        request.json["sku"],
-        request.json["qty"],
-        eta,
-        uow
-    )
-    return "OK", 201
+    try:
+        event = events.BatchCreated(
+            request.json["ref"],
+            request.json["sku"],
+            request.json["qty"],
+            eta
+        )
+        results = messagebus.handle(event, unit_of_work.SqlAlchemyUnitOfWork())
+        batchref = results.pop(0)
+    except InvalidSku as e:
+        return {"message": str(e)}, 400
+    return {"batchref": batchref}, 201
 
 
 @app.route("/deallocate", methods=["POST"])
 def deallocate():
-    uow = unit_of_work.SqlAlchemyUnitOfWork()
     try:
-        services.deallocate(
+        event = events.DeallocationRequired(
             request.json["orderid"],
             request.json["sku"],
-            request.json["qty"],
-            uow
+            request.json["qty"]
         )
-    except services.InvalidSku as e:
+        results = messagebus.handle(event, unit_of_work.SqlAlchemyUnitOfWork())
+        batchref = results.pop(0)
+    except InvalidSku as e:
         return {"message": str(e)}, 400
-    return "OK", 201
+    return {"batchref": batchref}, 201
