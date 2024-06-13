@@ -46,6 +46,9 @@ class Batch:
         if line in self._allocations:
             self._allocations.remove(line)
 
+    def deallocate_one(self) -> OrderLine:
+        return self._allocations.pop()
+
     @property
     def allocated_quantity(self) -> int:
         return sum(line.qty for line in self._allocations)
@@ -64,7 +67,6 @@ class Product:
         self.batches = batches
         self.version_number = version_number
         self.events = [] # type: List[events.Event]
-
 
     def allocate(self, line: OrderLine) -> str:
         try:
@@ -85,6 +87,12 @@ class Product:
             self.events.append(events.NotAllocated(orderid=line.orderid))
             return None
 
-
     def get_batch(self, reference: str) -> Batch:
         return next(b for b in self.batches if b.reference == reference)
+
+    def change_batch_quantity(self, ref: str, qty: int):
+        batch = next(b for b in self.batches if b.reference == ref)
+        batch._purchased_quantity = qty
+        while batch.available_quantity < 0:
+            line = batch.deallocate_one()
+            self.events.append(events.AllocationRequired(orderid=line.orderid, sku=line.sku, qty=line.qty))

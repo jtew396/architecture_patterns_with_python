@@ -20,6 +20,9 @@ class FakeRepository(repository.AbstractProductRepository):
     def _get(self, sku):
         return next((p for p in self._products if p.sku == sku), None)
 
+    def _get_by_batchref(self, batchref):
+        return next((p for p in self._products for b in p.batches if b.reference == batchref), None)
+
 
 class FakeUnitOfWork(unit_of_work.AbstractUnitOfWork):
     def __init__(self):
@@ -101,6 +104,12 @@ class TestError:
         with pytest.raises(handlers.OutOfStock, match='SMALL-FORK'):
             messagebus.handle(events.AllocationRequired("order2", "SMALL-FORK", 1), uow)
 
+    def for_unallocated_batch(self):
+        uow = FakeUnitOfWork()
+        messagebus.handle(events.BatchCreated("b1", "POPULAR-CURTAINS", 100, None), uow)
+        with pytest.raises(handlers.NotAllocated, match="Line o1 has not been allocated"):
+            messagebus.handle(events.DeallocationRequired("o1", "POPULAR-CURTAINS", 10), uow)
+
 
 class TestCommit:
     def test_commits(self):
@@ -133,8 +142,29 @@ class TestDeallocate:
         assert batch1.available_quantity == 100
         assert batch2.available_quantity == 100
 
-    def for_unallocated_batch(self):
+
+class TestChangeBatchQuantity:
+    def test_changes_available_quantity(self):
         uow = FakeUnitOfWork()
-        messagebus.handle(events.BatchCreated("b1", "POPULAR-CURTAINS", 100, None), uow)
-        with pytest.raises(handlers.NotAllocated, match="Line o1 has not been allocated"):
-            messagebus.handle(events.DeallocationRequired("o1", "POPULAR-CURTAINS", 10), uow)
+        messagebus.handle(events.BatchCreated("batch1", "ADORABLE-SETTEE", 100, None), uow)
+        [batch] = uow.products.get("ADORABLE-SETTEE").batches
+        assert batch.available_quantity == 100
+        messagebus.handle(events.BatchQuantityChanged("batch1", 50), uow)
+        assert batch.available_quantity == 50
+
+    def test_reallocates_if_necessary(self):
+        uow = FakeUnitOfWork()
+        event_history = [
+            events.BatchCreated("batch1", "INDIFFERENT-TABLE", 50, None),
+            events.BatchCreated("batch2", "INDIFFERENT-TABLE", 50, date.today()),
+            events.AllocationRequired("order1", "INDIFFERENT-TABLE", 20),
+            events.AllocationRequired("order2", "INDIFFERENT-TABLE", 20),
+        ]
+        for e in event_history:
+            messagebus.handle(e, uow)
+        [batch1, batch2] = uow.products.get("INDIFFERENT-TABLE").batches
+        assert batch1.available_quantity == 10
+        assert batch2.available_quantity == 50
+        messagebus.handle(events.BatchQuantityChanged("batch1", 25), uow)
+        assert batch1.available_quantity == 5
+        assert batch2.available_quantity == 30
