@@ -2,7 +2,7 @@ from flask import Flask, request
 from datetime import datetime
 
 from allocation.adapters import orm
-from allocation.domain import events
+from allocation.domain import commands
 from allocation.service_layer import messagebus, unit_of_work
 from allocation.service_layer.handlers import InvalidSku, OutOfStock
 
@@ -14,7 +14,7 @@ app = Flask(__name__)
 @app.route("/allocate", methods=["POST"])
 def allocate_endpoint():
     try:
-        event = events.AllocationRequired(
+        event = commands.Allocate(
             request.json["orderid"],
             request.json["sku"],
             request.json["qty"]
@@ -32,7 +32,7 @@ def add_batch():
     if eta is not None:
         eta = datetime.fromisoformat(eta).date()
     try:
-        event = events.BatchCreated(
+        event = commands.CreateBatch(
             request.json["ref"],
             request.json["sku"],
             request.json["qty"],
@@ -48,7 +48,7 @@ def add_batch():
 @app.route("/deallocate", methods=["POST"])
 def deallocate():
     try:
-        event = events.DeallocationRequired(
+        event = commands.Deallocate(
             request.json["orderid"],
             request.json["sku"],
             request.json["qty"]
