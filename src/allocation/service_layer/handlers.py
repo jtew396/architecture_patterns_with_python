@@ -1,4 +1,4 @@
-from allocation.adapters import email
+from allocation.adapters import email, redis_eventpublisher
 from allocation.domain import events, model, commands
 from allocation.service_layer import unit_of_work
 
@@ -78,3 +78,11 @@ def send_out_of_stock_notification(event: events.OutOfStock, uow: unit_of_work.A
         "stock@made.com",
         f"Out of stock for {event.sku}",
     )
+
+
+def publish_allocated_event(event: events.Allocated, uow: unit_of_work.AbstractUnitOfWork):
+    redis_eventpublisher.publish("line_allocated", event)
+
+
+def publish_deallocated_event(event: events.Deallocated, uow: unit_of_work.AbstractUnitOfWork):
+    redis_eventpublisher.publish("line_deallocated", event)

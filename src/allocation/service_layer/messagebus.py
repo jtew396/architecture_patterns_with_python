@@ -1,9 +1,7 @@
 import logging
-from tenacity import Retrying, RetryError, stop_after_attempt, wait_exponential
 from typing import Dict, List, Type, Callable, Union
 from allocation.domain import commands, events
-from allocation.service_layer import unit_of_work
-from allocation.service_layer import handlers
+from allocation.service_layer import handlers, unit_of_work
 
 
 logger = logging.getLogger(__name__)
@@ -30,13 +28,11 @@ def handle(message: Message, uow: unit_of_work.AbstractUnitOfWork):
 def handle_event(event: events.Event, queue: List[Message], uow: unit_of_work.AbstractUnitOfWork):
     for handler in EVENT_HANDLERS[type(event)]:
         try:
-            for attempt in Retrying(stop=stop_after_attempt(3), wait=wait_exponential()):
-                with attempt:
-                    logger.debug("handling event %s with handler %s", event, handler)
-                    handler(event, uow=uow)
-                    queue.extend(uow.collect_new_events())
-        except RetryError as retry_failure:
-            logger.error("Failed to handle event %s times, giving up!", retry_failure.last_attempt.attempt_number)
+            logger.debug("handling event %s with handler %s", event, handler)
+            handler(event, uow=uow)
+            queue.extend(uow.collect_new_events())
+        except Exception:
+            logger.error("Exception handling event %s", event)
             continue
 
 
@@ -53,6 +49,8 @@ def handle_command(command: commands.Command, queue: List[Message], uow: unit_of
 
 
 EVENT_HANDLERS = {
+    events.Allocated: [handlers.publish_allocated_event],
+    events.Deallocated: [handlers.publish_deallocated_event],
     events.OutOfStock: [handlers.send_out_of_stock_notification],
 }   # type: Dict[Type[events.Event], List[Callable]]
 
