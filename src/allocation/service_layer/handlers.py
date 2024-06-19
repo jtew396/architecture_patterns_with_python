@@ -1,3 +1,4 @@
+from sqlalchemy import text
 from allocation.adapters import email, redis_eventpublisher
 from allocation.domain import events, model, commands
 from allocation.service_layer import unit_of_work
@@ -90,3 +91,31 @@ def publish_batch_created_event(event: events.BatchCreated, uow: unit_of_work.Ab
 
 def publish_deallocated_event(event: events.Deallocated, uow: unit_of_work.AbstractUnitOfWork):
     redis_eventpublisher.publish("line_deallocated", event)
+
+
+def add_allocation_to_read_model(event: events.Allocated, uow: unit_of_work.AbstractUnitOfWork):
+    with uow:
+        uow.session.execute(
+            text(
+                """
+                INSERT INTO allocations_view (orderid, sku, batchref)
+                VALUES (:orderid, :sku, :batchref)
+                """
+            ),
+            dict(orderid=event.orderid, sku=event.sku, batchref=event.batchref)
+        )
+        uow.commit()
+
+
+def remove_allocation_from_read_model(event: events.Deallocated, uow: unit_of_work.AbstractUnitOfWork):
+    with uow:
+        uow.session.execute(
+            text(
+                """
+                DELETE FROM allocations_view
+                WHERE orderid = :orderid AND sku = :sku
+                """
+            ),
+            dict(orderid=event.orderid, sku=event.sku)
+        )
+        uow.commit()
