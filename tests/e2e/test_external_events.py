@@ -1,8 +1,63 @@
 import json
 import pytest
-from tenacity import Retrying, RetryError, stop_after_delay
+from tenacity import Retrying, stop_after_delay
 from . import api_client, redis_client
 from ..random_refs import random_batchref, random_orderid, random_sku
+
+
+@pytest.mark.usefixtures("postgres_db")
+@pytest.mark.usefixtures("restart_api")
+@pytest.mark.usefixtures("restart_redis_pubsub")
+def test_allocate_leading_to_line_allocated():
+    batchref, sku, qty, eta = random_batchref(), random_sku(), 100, None
+    api_client.post_to_add_batch(batchref, sku, qty, eta)
+
+    orderid = random_orderid()
+
+    subscription = redis_client.subscribe_to("line_allocated")
+
+    redis_client.publish_message(
+        "allocate",
+        {"orderid": orderid, "sku": sku, "qty": 10},
+    )
+
+    messages = []
+    for attempt in Retrying(stop=stop_after_delay(3), reraise=True):
+        with attempt:
+            message = subscription.get_message(timeout=1)
+            if message:
+                messages.append(message)
+                print(messages)
+            data = json.loads(messages[-1]["data"])
+            assert data["orderid"] == orderid
+            assert data["batchref"] == batchref
+
+
+@pytest.mark.usefixtures("postgres_db")
+@pytest.mark.usefixtures("restart_api")
+@pytest.mark.usefixtures("restart_redis_pubsub")
+def test_add_batch_leading_to_batch_created():
+    ref, sku, qty, eta = random_batchref(), random_sku(), 100, None
+
+    subscription = redis_client.subscribe_to("batch_created")
+
+    redis_client.publish_message(
+        "add_batch",
+        {"ref": ref, "sku": sku, "qty": qty, "eta": eta},
+    )
+
+    messages = []
+    for attempt in Retrying(stop=stop_after_delay(3), reraise=True):
+        with attempt:
+            message = subscription.get_message(timeout=1)
+            if message:
+                messages.append(message)
+                print(messages)
+            data = json.loads(messages[-1]["data"])
+            assert data["ref"] == ref
+            assert data["sku"] == sku
+            assert data["qty"] == qty
+            assert data["eta"] == eta
 
 
 @pytest.mark.usefixtures("postgres_db")
@@ -36,3 +91,32 @@ def test_change_batch_quantity_leading_to_reallocation():
             data = json.loads(messages[-1]["data"])
             assert data["orderid"] == orderid
             assert data["batchref"] == later_batch
+
+
+@pytest.mark.usefixtures("postgres_db")
+@pytest.mark.usefixtures("restart_api")
+@pytest.mark.usefixtures("restart_redis_pubsub")
+def test_deallocate_leading_to_line_deallocated():
+    batchref, sku, qty, eta = random_batchref(), random_sku(), 100, None
+    api_client.post_to_add_batch(batchref, sku, qty, eta)
+
+    orderid = random_orderid()
+    api_client.post_to_allocate(orderid, sku, qty=10)
+
+    subscription = redis_client.subscribe_to("line_deallocated")
+
+    redis_client.publish_message(
+        "deallocate",
+        {"orderid": orderid, "sku": sku, "qty": 10},
+    )
+
+    messages = []
+    for attempt in Retrying(stop=stop_after_delay(3), reraise=True):
+        with attempt:
+            message = subscription.get_message(timeout=1)
+            if message:
+                messages.append(message)
+                print(messages)
+            data = json.loads(messages[-1]["data"])
+            assert data["orderid"] == orderid
+            assert data["batchref"] == batchref

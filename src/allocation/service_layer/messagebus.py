@@ -50,6 +50,7 @@ def handle_command(command: commands.Command, queue: List[Message], uow: unit_of
 
 EVENT_HANDLERS = {
     events.Allocated: [handlers.publish_allocated_event],
+    events.BatchCreated: [handlers.publish_batch_created_event],
     events.Deallocated: [handlers.publish_deallocated_event],
     events.OutOfStock: [handlers.send_out_of_stock_notification],
 }   # type: Dict[Type[events.Event], List[Callable]]

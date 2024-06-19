@@ -48,7 +48,7 @@ def add_batch(command: commands.CreateBatch, uow: unit_of_work.AbstractUnitOfWor
         if product is None:
             product = model.Product(command.sku, batches=[])
             uow.products.add(product)
-        product.batches.append(model.Batch(command.ref, command.sku, command.qty, command.eta))
+        product.add_batch(model.Batch(command.ref, command.sku, command.qty, command.eta))
         uow.commit()
 
 
@@ -82,6 +82,10 @@ def send_out_of_stock_notification(event: events.OutOfStock, uow: unit_of_work.A
 
 def publish_allocated_event(event: events.Allocated, uow: unit_of_work.AbstractUnitOfWork):
     redis_eventpublisher.publish("line_allocated", event)
+
+
+def publish_batch_created_event(event: events.BatchCreated, uow: unit_of_work.AbstractUnitOfWork):
+    redis_eventpublisher.publish("batch_created", event)
 
 
 def publish_deallocated_event(event: events.Deallocated, uow: unit_of_work.AbstractUnitOfWork):

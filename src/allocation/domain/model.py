@@ -104,6 +104,11 @@ class Product:
             self.events.append(events.NotAllocated(orderid=line.orderid))
             return None
 
+    def add_batch(self, batch: Batch):
+        self.batches.append(batch)
+        self.version_number += 1
+        self.events.append(events.BatchCreated(batch.reference, self.sku, batch._purchased_quantity, batch.eta))
+
     def get_batch(self, reference: str) -> Batch:
         return next(b for b in self.batches if b.reference == reference)
 
