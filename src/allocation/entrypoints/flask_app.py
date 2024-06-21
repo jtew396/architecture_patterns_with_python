@@ -1,21 +1,18 @@
 from flask import Flask, jsonify, request
 from datetime import datetime
 
-from allocation import views
-from allocation.adapters import orm
+from allocation import bootstrap, views
 from allocation.domain import commands
-from allocation.service_layer import messagebus, unit_of_work
 from allocation.service_layer.handlers import InvalidSku, OutOfStock
 
 
-orm.start_mappers()
 app = Flask(__name__)
+bus = bootstrap.bootstrap()
 
 
 @app.route("/allocations/<orderid>", methods=["GET"])
 def allocations_view_endpoint(orderid):
-    uow = unit_of_work.SqlAlchemyUnitOfWork()
-    result = views.allocations(orderid, uow)
+    result = views.allocations(orderid, bus.uow)
     if not result:
         return "not found", 404
     return jsonify(result), 200
@@ -29,9 +26,8 @@ def allocate_endpoint():
             request.json["sku"],
             request.json["qty"]
         )
-        uow = unit_of_work.SqlAlchemyUnitOfWork()
-        messagebus.handle(cmd, uow)
-    except (OutOfStock, InvalidSku) as e:
+        bus.handle(cmd)
+    except (InvalidSku) as e:
         return {"message": str(e)}, 400
     return "OK", 202
 
@@ -48,8 +44,7 @@ def add_batch():
             request.json["qty"],
             eta
         )
-        uow = unit_of_work.SqlAlchemyUnitOfWork()
-        results = messagebus.handle(cmd, uow)
+        results = bus.handle(cmd)
         batchref = results.pop(0)
     except InvalidSku as e:
         return {"message": str(e)}, 400
@@ -64,8 +59,7 @@ def deallocate():
             request.json["sku"],
             request.json["qty"]
         )
-        uow = unit_of_work.SqlAlchemyUnitOfWork()
-        results = messagebus.handle(cmd, uow)
+        results = bus.handle(cmd)
         batchref = results.pop(0)
     except InvalidSku as e:
         return {"message": str(e)}, 400

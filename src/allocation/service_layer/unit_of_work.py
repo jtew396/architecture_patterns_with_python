@@ -1,6 +1,7 @@
 import abc
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
+from sqlalchemy.orm.session import Session
 
 from allocation import config
 from allocation.adapters import repository
@@ -30,7 +31,7 @@ class AbstractUnitOfWork(abc.ABC):
     @abc.abstractmethod
     def rollback(self):
         raise NotImplementedError
-    
+
 
 DEFAULT_SESSION_FACTORY = sessionmaker(
     bind=create_engine(
@@ -38,14 +39,14 @@ DEFAULT_SESSION_FACTORY = sessionmaker(
         isolation_level="REPEATABLE READ",
     )
 )
-    
+
 
 class SqlAlchemyUnitOfWork(AbstractUnitOfWork):
     def __init__(self, session_factory=DEFAULT_SESSION_FACTORY):
         self.session_factory = session_factory
 
     def __enter__(self):
-        self.session = self.session_factory()
+        self.session = self.session_factory()   # type: Session
         self.products = repository.SqlAlchemyRepository(self.session)
         return super().__enter__()
 

@@ -52,9 +52,13 @@ def test_deallocate():
     assert r.ok
     assert r.json() == [{"sku": sku, "batchref": batch}]
 
-    # cannot allocate second order
+    # attempt to allocate second order
     r = api_client.post_to_allocate(order2, sku, qty=100, expect_success=False)
-    assert r.status_code == 400
+    assert r.ok
+
+    # second order is not in allocations
+    r = api_client.get_allocation(order2)
+    assert r.status_code == 404
 
     # deallocate
     r = api_client.post_to_deallocate(order1, sku, qty=100)

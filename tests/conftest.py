@@ -33,6 +33,11 @@ def session(session_factory):
     return session_factory()
 
 
+@pytest.fixture
+def sqlite_session_factory(in_memory_db):
+    yield sessionmaker(bind=in_memory_db)
+
+
 @retry(stop=stop_after_delay(10))
 def wait_for_postgres_to_come_up(engine):
     return engine.connect()
